@@ -224,7 +224,7 @@ def send_msg():
 # 发送获取图片请求//(如果存在则直接返回图片)
 def get_head_img(url, cookie):
     try:
-        img_save_path = os.path.join(os.path.dirname(__file__), "static\\headimg", url[1] + ".jpg")
+        img_save_path = os.path.join(os.path.dirname(__file__), "static/headimg", url[1] + ".jpg")
         return_img = "/static/headimg/"+url[1]+".jpg"
         if os.path.exists(img_save_path):
             return return_img
