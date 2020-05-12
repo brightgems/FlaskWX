@@ -3,6 +3,7 @@ coloredlogs
 humanfriendly
 lxml
 qrcode
+zxing
 requests
 six
 requests_toolbelt

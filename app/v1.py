@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from flask import render_template, Blueprint, session, request, jsonify, redirect, url_for
 import time
+from datetime import datetime
 import requests
 import re
 from bs4 import BeautifulSoup
@@ -10,7 +11,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import base64
 from io import BytesIO
-# from . import mongo
+from . import mongo
 from PIL import Image
 import os
 wxchat = Blueprint('v1', __name__)
@@ -18,15 +19,20 @@ wxchat = Blueprint('v1', __name__)
 
 @wxchat.route('')
 def login():
-    ctime = time.time() * 1000  # 模拟一个相同的时间戳
-    base_url = 'https://login.wx.qq.com/jslogin?appid=wx782c26e4c19acffb&redirect_uri=https%3A%2F%2Fwx.qq.com%2Fcgi-bin%2Fmmwebwx-bin%2Fwebwxnewloginpage&fun=new&lang=zh_CN&_={0}'
-    url = base_url.format(ctime)  # 字符串拼接，生成新的url
-    response = requests.get(url)  # 向新的url发送get请求
-    xcode_list = re.findall('window.QRLogin.uuid = "(.*)";',
-                            response.text)  #
-    session['xcode'] = xcode_list[0]  # 获取到参数，存入session内
+    if not session.get('xcode'):
+        ctime = time.time() * 1000  # 模拟一个相同的时间戳
+        base_url = 'https://login.wx.qq.com/jslogin?appid=wx782c26e4c19acffb&redirect_uri=https%3A%2F%2Fwx.qq.com%2Fcgi-bin%2Fmmwebwx-bin%2Fwebwxnewloginpage&fun=new&lang=zh_CN&_={0}'
+        url = base_url.format(ctime)  # 字符串拼接，生成新的url
+        response = requests.get(url)  # 向新的url发送get请求
+        xcode_list = re.findall('window.QRLogin.uuid = "(.*)";',
+                                response.text)  #
+        xcode= xcode_list[0]  # 获取到参数，存入session内
+        session['xcode'] = xcode
+    else:
+        xcode = session.get('xcode')
+
     # index.html 原版  index1.html 是以后要开发的版本，对功能进行分块细化
-    return render_template('index.html', xcode=xcode_list[0])  # 返回给login页面此参数
+    return render_template('index.html', xcode=xcode)  # 返回给login页面此参数
 
 
 @wxchat.route('/check_login')
@@ -69,6 +75,12 @@ def check_login():
         session['ticket_cookie'] = r2.cookies.get_dict()  # session中存入获取重定向的cookie
         ret['code'] = 200  # 200表示确定登陆了
         session['is_login'] = True  # 给后面的url判断是否登陆
+        # write login history
+        mongo.db.loginHistory.insert_one({
+            'xcode':session['xcode'],
+            'time':datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'ticket_cookie': session['ticket_dict']
+        })
     return jsonify(ret)  # Json序列化返回
 
 
@@ -124,7 +136,7 @@ def contact_all():
         r1 = requests.get(url, cookies=all_cookies)
         r1.encoding = r1.apparent_encoding
         contact_dict = json.loads(r1.content)
-        # mongo.db.flaskwx.insert_one(contact_dict)
+        mongo.db.contacts.insert_one(contact_dict)
         print(contact_dict)
         # 获取联系人头像
         head_img_list = [["https://wx.qq.com" + item['HeadImgUrl'], item['UserName']] for item in contact_dict['MemberList'] if item['RemarkName']]
